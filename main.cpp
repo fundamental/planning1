@@ -11,9 +11,13 @@ struct state_t;
 struct graph_t;
 struct subspace_t;
 struct action_t;
-struct actions_t;
 struct path_t;
 struct grid_t;
+
+struct action_t {
+};
+
+typedef vector<action_t> actions_t;
 
 struct pos_t
 {
@@ -144,6 +148,11 @@ grid_t connectivity(grid_t g, pos_t p)
     return grid;
 }
 
+actions_t findActions(grid_t background, grid_t connectivity, vector<pos_t> balls)
+{
+    return actions_t();
+}
+
 void setup_demo(void)
 {
     background = new grid_t(6,4);
@@ -159,6 +168,7 @@ void setup_demo(void)
 
     grid_t g1 = mergeBalls(*background, balls);
     grid_t g2 = connectivity(g1, robot);
+    actions_t a = findActions(g1, g2, balls);
     g2.dump();
 }
 
