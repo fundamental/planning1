@@ -371,7 +371,7 @@ paths_t actionsToPaths(path_t &cur, actions_t act)
     //XXX improve cost functions
     paths_t result;
     for(auto a:act) {
-        float incremental_cost = 0.1;
+        float incremental_cost = 0.01*(abs(cur.act.robot.x-a.robot.x) + abs(cur.act.robot.y-a.robot.y));
         //if(known_states.find(a) != known_states.end())
         //    continue;
         //if(isImpossible(*background,a.balls, goals))
