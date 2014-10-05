@@ -155,6 +155,7 @@ struct grid_t
     }
 };
 
+//assigning variables and functions
 set<action_t> known_states;
 
 grid_t     mergeBalls(grid_t g);
@@ -173,6 +174,7 @@ pos_t robot;
 paths_t paths;
 paths_t unexplored_path;
 
+//Adds the balls into the grid
 grid_t mergeBalls(grid_t g, vector<pos_t> balls)
 {
     grid_t grid(g.X, g.Y);
@@ -186,6 +188,7 @@ grid_t mergeBalls(grid_t g, vector<pos_t> balls)
     return grid;
 }
 
+//Returns the portion of grid g connected to p
 grid_t connectivity(grid_t g, pos_t p)
 {
     grid_t grid (g.X, g.Y);
@@ -210,7 +213,7 @@ grid_t connectivity(grid_t g, pos_t p)
     return grid;
 }
 
-
+//updates balls after a move (ball from 'prev' goes to 'next')
 balls_t gsub(balls_t b, pos_t prev, pos_t next)
 {
     balls_t res;
@@ -239,7 +242,7 @@ actions_t findActions(grid_t background, grid_t connectivity, vector<pos_t> ball
         if(connectivity(b.x, b.y+1, 0) && !background(b.x, b.y-1, 1))//D
             result.push_back({D,{b.x,b.y+1},{b.x,b.y},gsub(balls,{b.x,b.y},{b.x,b.y-1})});
         if(connectivity(b.x, b.y-1, 0) && !background(b.x, b.y+1, 1))//U
-            result.push_back({D,{b.x,b.y-1},{b.x,b.y},gsub(balls,{b.x,b.y},{b.x,b.y+1})});
+            result.push_back({U,{b.x,b.y-1},{b.x,b.y},gsub(balls,{b.x,b.y},{b.x,b.y+1})});
     }
 
     return result;
@@ -265,6 +268,7 @@ void print(paths_t p)
     }
 }
 
+//a = balls, b = goals
 float dist2(vector<pos_t> a, vector<pos_t>b)
 {
     assert(a.size() == b.size());
@@ -586,8 +590,76 @@ void setup_demo2(void)
         explore();
 }
 
-int main()
+//NOTE: Assumes first line is "X_DIM,Y_DIM", and each successive line
+//is one row of the level
+void parse_level(char* levelFile)
 {
-    setup_demo2();
+    //opening file
+    FILE * pFile;
+    pFile = fopen(levelFile, "r");
+    if(pFile == NULL) perror("Error opening level file");
+
+    //reading width and height
+    char levelWidth [4];
+    char levelHeight [4];
+    fgets(levelWidth, 3, pFile);
+    getc(pFile);
+    fgets(levelHeight, 3, pFile); 
+    getc(pFile);
+    int w = atoi(levelWidth);
+    int h = atoi(levelHeight);
+
+    //setting up grid
+    background = new grid_t(w,h);
+    auto &bg = *background;
+    char nextChar[2];
+    for(int y=0; y<h; y++){
+        for(int x=0; x<=w; x++){
+            fgets(nextChar, 2, pFile);
+            switch(nextChar[0]){
+                case '\n':
+                    break;
+                case 'X':
+                    bg(x,y) = 1;
+                    break;
+                case ' ':
+                    bg(x,y) = 0;
+                    break;
+                case 'R':
+                    robot = pos_t{x,y};
+                    bg(x,y) = 0;
+                    break;
+                case 'G':
+                    goals.push_back({x,y});
+                    bg(x,y) = 0;
+                    break;
+                case 'B':
+                    balls.push_back({x,y});
+                    bg(x,y) = 0;
+                    break;
+            }
+            
+        }
+    }
+    fclose(pFile);
+}
+
+int main(int argc, char* argv[])
+{
+    if(argc < 2) {
+        printf("Usage: %s level\n", argv[0]);
+        return 1;
+    }
+
+    char levelFile [16];
+    sprintf(levelFile, "level%s.txt", argv[1]);
+    parse_level(levelFile);
+    printf("FInished parse\n");
+    background->dump(robot, balls, goals);
+    
+    unexplored_path.push_back(initialPath(robot, balls));
+    //append(unexplored_path, actionsToPaths(paths[0], a));
+    while(!unexplored_path.empty() && !foundSolution())
+        explore();
     return 0;
 }
