@@ -282,7 +282,6 @@ int ballsGridDist(balls_t balls){
                 break;
         }
     }
-    printf("Distance of balls: %d\n", totalDistance);
     return totalDistance;
 }
 
@@ -311,8 +310,6 @@ bool isImpossible(grid_t g, balls_t balls)
             //printf("impossible RD\n");
             return true;
         }
-        //continue;
-        //XXX unreliable cases
 
         ////vertical case
         bool wallLU = g(b.x-1,b.y,1) && g(b.x-1, b.y-1,1);\
@@ -330,14 +327,14 @@ bool isImpossible(grid_t g, balls_t balls)
 //Generate paths from a set of new actions
 paths_t actionsToPaths(path_t &cur, actions_t act)
 {
-    //XXX improve cost functions
     paths_t result;
     grid_t starting_grid = mergeBalls(*background, cur.act.balls);
     for(auto a:act) {
-        int rMoveDist = robotGridDist(starting_grid, cur.act.robot, a.robot, a.direction);
-        float incremental_cost = 0.01*rMoveDist;
-        result.push_back({&cur, a, ballsGridDist(a.balls) + 99999*isImpossible(*background,a.balls),
-                incremental_cost+cur.total_cost, cur.robot_steps + rMoveDist, cur.depth+1});
+        int robotSteps = robotGridDist(starting_grid, cur.act.robot, a.robot, a.direction);
+        float robotCost = 10*robotSteps;
+        float ballCosts = 60*ballsGridDist(a.balls);
+        result.push_back({&cur, a, ballCosts + 99999*isImpossible(*background,a.balls),
+                robotCost + cur.total_cost, cur.robot_steps + robotSteps, cur.depth+1});
     }
     return result;
 }
@@ -397,9 +394,7 @@ void explore(void)
     //print(a);
     static int iteration = 0;
     iteration++;
-    printf("actions: %d ->", (int)unexplored_path.size());
     append(unexplored_path, actionsToPaths(p, a));
-    printf("%d\n",(int)unexplored_path.size());
     printf("step: %d depth: %d space: %d cost: %f r_steps %d\n",iteration, p.depth, unexplored_path.size(), p.remaining, p.robot_steps);
 }
 
