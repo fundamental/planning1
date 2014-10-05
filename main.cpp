@@ -127,22 +127,37 @@ float dist2(balls_t balls)
     return total;
 }
 
-//Calculates distance in connected grid spaces
-int gridDist(grid_t g, pos_t a, pos_t b, dir_t d)
+//Calculates robot move distance in connected grid spaces
+int robotGridDist(grid_t g, pos_t a, pos_t b, dir_t d)
 {
-    if(a == b)
-        return 0;
-    /*switch(d){
+    //Find the spot from which robot pushes
+    switch(d){
         case U:
+            b = pos_t(b.x, b.y+1);
+            break;
+        case D:
+            b = pos_t(b.x, b.y-1);
+            break;
+        case L:
+            b = pos_t(b.x+1, b.y);
+            break;
+        case R:
+            b = pos_t(b.x-1, b.y);
+            break;
+    }
 
-    }*/
+    //Return 1 to account for robot's push
+    if(a == b)
+        return 1;
 
+    //setup for bfs
     queue<pos_t> toVisit;
     queue<int> dists;
     set<pos_t> visited;
     toVisit.push(a);
-    dists.push(0);
-    //robot/ball is 1 in grid, so ignore in first round
+    dists.push(1);   //Also 1 to account for push
+
+    //robot == 1 in grid, so ignore in first round
     bool firstPass = true;
 
     //performs BFS on grid
@@ -177,7 +192,98 @@ int gridDist(grid_t g, pos_t a, pos_t b, dir_t d)
         }
         firstPass = false;
     }
-    return -1;
+    //something went wrong and the robot can't get to push location
+    return 99999;
+}
+
+//for each goal, finds distance to closest ball using BFS
+int ballsGridDist(balls_t balls){
+    assert(balls.size() == goals.size());
+    grid_t g = *background;
+    int totalDistance = 0;
+
+    //track which balls/goals are claimed
+    vector<bool> bs;
+    vector<bool> gs;
+    for(auto bb:balls) {
+        (void) bb;
+        bs.push_back(0);
+        gs.push_back(0);
+    }
+
+    //eliminate goal/ball pairs that are already accounted for
+    for(int i=0; i<balls.size(); ++i){
+        for(int j=0; j<goals.size(); ++j){
+            if(balls[i] == goals[j]){
+                bs[i] = 1;
+                gs[j] = 1;
+            }
+        }
+    }
+
+    for(int i=0; i<goals.size(); ++i) {
+
+        pos_t gg = goals[i];
+
+        //if a ball is at goal, distance is 0
+        if(gs[i])
+            continue;
+
+        //setup for BFS
+        queue<pos_t> toVisit;
+        queue<int> dists;
+        set<pos_t> visited;
+        toVisit.push(gg);
+        dists.push(0);
+
+        //performs BFS on grid
+        while(!toVisit.empty())
+        {
+            pos_t p = toVisit.front();
+            toVisit.pop();
+            int distToP = dists.front();
+            dists.pop();            
+            if(g(p) || visited.count(p) != 0)
+                continue;
+            vector<pos_t> newPs;
+            if(p.x != 0) //left
+                newPs.push_back(pos_t(p.x-1, p.y));
+            if(p.x != g.X-1) //right
+                newPs.push_back(pos_t(p.x+1, p.y));
+            if(p.y != 0) //down
+                newPs.push_back(pos_t(p.x, p.y-1));
+            if(p.y != g.Y-1) //up
+                newPs.push_back(pos_t(p.x, p.y+1));
+            visited.insert(p);
+            bool foundBall = false;
+            for(int i=0; i < newPs.size(); ++i)
+            {
+                pos_t next = newPs.at(i);
+                if(visited.count(next) == 0)
+                {
+                    //grab distance to first unclaimed ball
+                    for(int i=0; i<balls.size(); ++i){
+                        if(next==balls[i] && !bs[i]){
+                            foundBall = true;
+                            bs[i] = 1;
+                        }
+                    }
+                    if(foundBall){
+                        totalDistance += distToP + 1;
+                        break;
+                    }
+
+                    //no ball found for this square
+                    toVisit.push(newPs.at(i));
+                    dists.push(distToP + 1);
+                }
+            }
+            if(foundBall)
+                break;
+        }
+    }
+    printf("Distance of balls: %d\n", totalDistance);
+    return totalDistance;
 }
 
 //check for corner stuck plus hall stuck
@@ -221,22 +327,22 @@ bool isImpossible(grid_t g, balls_t balls)
     return false;
 }
 
-
+//Generate paths from a set of new actions
 paths_t actionsToPaths(path_t &cur, actions_t act)
 {
     //XXX improve cost functions
     paths_t result;
     grid_t starting_grid = mergeBalls(*background, cur.act.balls);
     for(auto a:act) {
-        int rMoveDist = gridDist(starting_grid, cur.act.robot, a.robot);
+        int rMoveDist = robotGridDist(starting_grid, cur.act.robot, a.robot, a.direction);
         float incremental_cost = 0.01*rMoveDist;
-        result.push_back({&cur, a, dist2(a.balls) + 99999*isImpossible(*background,a.balls),
+        result.push_back({&cur, a, ballsGridDist(a.balls) + 99999*isImpossible(*background,a.balls),
                 incremental_cost+cur.total_cost, cur.robot_steps + rMoveDist, cur.depth+1});
     }
     return result;
 }
 
-//Add all paths which have not been explored and are not pending
+//Add all paths that have not been explored and are not pending
 paths_t &append(paths_t &a, const paths_t &b)
 {    
     //XXX this should add paths if a lower cost route has been found
