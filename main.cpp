@@ -5,7 +5,7 @@ goals_t goals;
 pos_t robot;
 set<action_t> known_states;
 
-paths_t paths;
+vector<path_t*> paths;
 paths_t unexplored_path;
 
 //Adds the balls into the grid
@@ -128,24 +128,8 @@ float dist2(balls_t balls)
 }
 
 //Calculates robot move distance in connected grid spaces
-int robotGridDist(grid_t g, pos_t a, pos_t b, dir_t d)
+int robotGridDist(grid_t g, pos_t a, pos_t b)
 {
-    //Find the spot from which robot pushes
-    switch(d){
-        case U:
-            b = pos_t(b.x, b.y+1);
-            break;
-        case D:
-            b = pos_t(b.x, b.y-1);
-            break;
-        case L:
-            b = pos_t(b.x+1, b.y);
-            break;
-        case R:
-            b = pos_t(b.x-1, b.y);
-            break;
-    }
-
     //Return 1 to account for robot's push
     if(a == b)
         return 1;
@@ -194,6 +178,80 @@ int robotGridDist(grid_t g, pos_t a, pos_t b, dir_t d)
     }
     //something went wrong and the robot can't get to push location
     return 99999;
+}
+
+//Calculates robot move distance in connected grid spaces
+string getCommands(grid_t g, pos_t a, pos_t b, dir_t d)
+{
+    string last_comm = "";
+
+    switch(d){
+        case U:
+            last_comm = "U";
+            break;
+        case D:
+            last_comm = "D";
+            break;
+        case L:
+            last_comm = "L";
+            break;
+        case R:
+            last_comm = "R";
+            break;
+    }
+
+    if(a == b)
+        return last_comm;
+
+    //setup for bfs
+    queue<pos_t> toVisit;
+    queue<string> strings;
+    set<pos_t> visited;
+    toVisit.push(a);
+    strings.push("");   
+
+    //robot == 1 in grid, so ignore in first round
+    bool firstPass = true;
+
+    //performs BFS on grid
+    while(!toVisit.empty())
+    {
+        pos_t p = toVisit.front();
+        toVisit.pop();
+        string stringToP = strings.front();
+        strings.pop();
+        if((g(p) && !firstPass) || visited.count(p) != 0)
+            continue;
+        vector<pos_t> newPs;
+        vector<string> newStrings;
+        if(p.x != 0) //left
+            newPs.push_back(pos_t(p.x-1, p.y));
+            newStrings.push_back(stringToP + "L");
+        if(p.x != g.X-1) //right
+            newPs.push_back(pos_t(p.x+1, p.y));
+            newStrings.push_back(stringToP + "R");
+        if(p.y != 0) //down
+            newPs.push_back(pos_t(p.x, p.y-1));
+            newStrings.push_back(stringToP + "U");
+        if(p.y != g.Y-1) //up
+            newPs.push_back(pos_t(p.x, p.y+1));
+            newStrings.push_back(stringToP + "D");
+        visited.insert(p);
+        for(int i=0; i < newPs.size(); ++i)
+        {
+            pos_t next = newPs.at(i);
+            if(visited.count(next) == 0)
+            {
+                if(b == next)
+                    return newStrings.at(i) + last_comm;
+                toVisit.push(newPs.at(i));
+                strings.push(newStrings.at(i));
+            }
+        }
+        firstPass = false;
+    }
+    //something went wrong and the robot can't get to push location
+    return "_";
 }
 
 //for each goal, finds distance to closest ball using BFS
@@ -329,12 +387,12 @@ paths_t actionsToPaths(path_t &cur, actions_t act)
 {
     paths_t result;
     grid_t starting_grid = mergeBalls(*background, cur.act.balls);
-    for(auto a:act) {
-        int robotSteps = robotGridDist(starting_grid, cur.act.robot, a.robot, a.direction);
+    for(auto a:act) {        
+        int robotSteps = robotGridDist(starting_grid, cur.act.robot, a.pos);
         float robotCost = 10*robotSteps;
         float ballCosts = 60*ballsGridDist(a.balls);
         result.push_back({&cur, a, ballCosts + 99999*isImpossible(*background,a.balls),
-                robotCost + cur.total_cost, cur.robot_steps + robotSteps, cur.depth+1});
+            robotCost + cur.total_cost, cur.robot_steps + robotSteps, cur.depth+1});
     }
     return result;
 }
@@ -380,11 +438,15 @@ void explore(void)
         exit(1);
 
     //Explore path
-    paths.push_back(unexplored_path[ind]);
-    path_t &p = *paths.rbegin();
+
+    path_t* next_path = new path_t(unexplored_path[ind]);
+    //memcpy(next_path, &unexplored_path[ind],sizeof(path_t));
+    paths.push_back(next_path);
+    //paths.push_back(unexplored_path[ind]);
+    path_t &p = *next_path;
     unexplored_path.erase(unexplored_path.begin()+ind);
-    printf("-------------------------------------------------\n");
-    background->dump(p.act.robot, p.act.balls, goals);
+    //printf("-------------------------------------------------\n");
+    //background->dump(p.act.robot, p.act.balls, goals);
 
     grid_t g1 = mergeBalls(*background, p.act.balls);
     grid_t g2 = connectivity(g1, p.act.robot);
@@ -395,14 +457,14 @@ void explore(void)
     static int iteration = 0;
     iteration++;
     append(unexplored_path, actionsToPaths(p, a));
-    printf("step: %d depth: %d space: %d cost: %f r_steps %d\n",iteration, p.depth, unexplored_path.size(), p.remaining, p.robot_steps);
+    //printf("step: %d depth: %d space: %d cost: %f r_steps %d\n",iteration, p.depth, unexplored_path.size(), p.remaining, p.robot_steps);
 }
 
 //True if one of the explored paths results in a zero distance win
 bool foundSolution(void)
 {
     for(int i=0; i<(int)paths.size(); ++i)
-        if(paths[i].remaining == 0)
+        if(paths[i]->remaining == 0)
             return true;
     return false;
 }
@@ -461,8 +523,42 @@ void parse_level(char *levelFile)
         }
     }
     fclose(pFile);    
-    background->dump(robot, balls, goals);
+    //background->dump(robot, balls, goals);
+    //printf("\nReady:\n\n");
     unexplored_path.push_back(initialPath(robot, balls));
+}
+
+//calculates the string of robot input leading to a solution
+void printSolution(path_t* endState)
+{
+    int path_length = (int)endState->depth;
+    path_t** solution = new path_t* [path_length+1];
+    path_t* path_ptr = endState;
+    for(int i=path_length; i>=0; --i)
+    {
+        //printf("i: %d\t Pointer: %p\t Prev: %p\t Depth: %d\n", i, path_ptr,path_ptr->prev,(int)path_ptr->depth);
+        solution[i] = path_ptr;
+        path_ptr = path_ptr->prev;
+    }
+    for(int i=0; i<path_length; ++i)
+    {
+        path_t p1 = *solution[i];
+        path_t p2 = *solution[i+1];
+
+        /*background->dump(p1.act.robot, p1.act.balls, goals);
+        printf("P1_pos: (%d,%d); P1_robot: (%d,%d)\n",p1.act.pos.x,p1.act.pos.y,p1.act.robot.x,p1.act.robot.y);
+        printf("\n\n");
+        background->dump(p2.act.robot, p2.act.balls, goals);
+        printf("P2_pos: (%d,%d); P2_robot: (%d,%d)\n",p2.act.pos.x,p2.act.pos.y,p2.act.robot.x,p2.act.robot.y);
+        */
+
+        grid_t filled_grid = mergeBalls(*background, p1.act.balls);
+        string next_substr = getCommands(filled_grid, p1.act.robot, p2.act.pos, p2.act.direction);
+        printf("%s", next_substr.c_str());
+        //printf("\n========================\n");
+    }
+    printf("\n");
+
 }
 
 int main(int argc, char* argv[])
@@ -478,5 +574,27 @@ int main(int argc, char* argv[])
 
     while(!unexplored_path.empty() && !foundSolution())
         explore();
+
+    int ind = -1;
+    bool solved = false;
+    for(int i=0; i < paths.size(); ++i){
+        if(paths[i]->remaining == 0){
+            ind = i;
+            solved = true;
+        }
+    }
+    path_t* finalState = paths[ind];
+
+    if(!solved)
+        printf("No solution found.\n");
+    else{
+        printSolution(finalState);
+    }
+
+    for(auto p:paths)
+        delete p;
+
+    delete background;
+
     return 0;
 }

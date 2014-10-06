@@ -6,10 +6,13 @@
 #include <cstdlib>
 #include <set>
 #include <cmath>
+#include <string>
+#include <iostream>
 
 using std::vector;
 using std::queue;
 using std::set;
+using std::string;
 
 //NaN state for initiail conditions
 enum dir_t {L,R,U,D,NOT_A_DIRECTION};
